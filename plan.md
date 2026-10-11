@@ -46,4 +46,6 @@ vía `bt-core.js`. 3 dominios = 3 Sheets ya creados en Drive.
 - Task 4 sesión + series: complete
 - Task 5 timer: complete
 - Task 6 evolución: complete
-- Task 7 deploy: pendiente (repo nuevo en GitHub + Pages, lo hace el usuario)
+- Task 7 deploy: complete (https://joacomedel.github.io/gym/)
+- Rework front estilo FitNotes: complete (pantalla por ejercicio Anotar/Historial/Gráfico,
+  steppers, home por día ‹HOY›, gráfico con métrica+rango+tendencia). 18 tests.
