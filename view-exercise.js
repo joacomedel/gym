@@ -125,7 +125,7 @@
       if (L().toNum(rp) == null || Math.round(L().toNum(rp)) < 0) { U().status(st(), "Reps inválidas.", "error"); return; }
       U().status(st(), "Guardando…", "");
       bt.append("series", {
-        sesion: ses.sesion, rutina: ses.rutina, ejercicio: nombre,
+        sesion: ses.sesion, rutina: opts.rutina || ses.rutina, ejercicio: nombre,
         kg: String(k).trim(), reps: String(Math.round(L().toNum(rp))),
         grupo: it.grupo || "", dropset: body.querySelector("#sDrop").checked ? "sí" : "",
       }).then(function (res) {

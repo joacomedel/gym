@@ -139,3 +139,26 @@ test('serieMaxKg y serieTonelaje agregan por sesión', () => {
   assert.deepEqual(GymLib.serieMaxKg(rows).map((p) => p.valor), [80, 60]);
   assert.deepEqual(GymLib.serieTonelaje(rows).map((p) => p.valor), [1340, 600]);
 });
+
+test('agruparPorRutina ordena por selección y conserva orden interno', () => {
+  const items = [
+    { rutina: 'Pull', ejercicio: 'B', orden: 1 },
+    { rutina: 'Push', ejercicio: 'A', orden: 0 },
+    { rutina: 'Push', ejercicio: 'C', orden: 2 },
+  ];
+  const g = GymLib.agruparPorRutina(items, ['Push', 'Pull']);
+  assert.deepEqual(g.map((x) => x.rutina), ['Push', 'Pull']);
+  assert.deepEqual(g[0].items.map((i) => i.ejercicio), ['A', 'C']);
+});
+
+test('agruparPorRutina manda al final lo no seleccionado', () => {
+  const items = [{ rutina: 'X', ejercicio: 'A', orden: 0 }, { rutina: 'Y', ejercicio: 'B', orden: 0 }];
+  const g = GymLib.agruparPorRutina(items, ['Y']);
+  assert.deepEqual(g.map((x) => x.rutina), ['Y', 'X']);
+});
+
+test('splitRutinas une y separa etiquetas de sesión', () => {
+  assert.deepEqual(GymLib.splitRutinas('Push + Pull'), ['Push', 'Pull']);
+  assert.deepEqual(GymLib.splitRutinas('Push'), ['Push']);
+  assert.equal(GymLib.joinRutinas(['Push', 'Pull']), 'Push + Pull');
+});

@@ -47,6 +47,27 @@
     } catch (e) {}
   }
 
+  /** Rutinas de una sesión (una sesión = varias rutinas, etiqueta "A + B"). */
+  function sesRutinas(ctx, ses) {
+    var todas = nombresRutina(ctx.rutinas);
+    return L().splitRutinas(ses.rutina).filter(function (r) { return todas.indexOf(r) !== -1; });
+  }
+  function sesItems(ctx, ses) {
+    var sel = sesRutinas(ctx, ses);
+    return ctx.rutinas.filter(function (r) { return sel.indexOf(String(r.rutina || "").trim()) !== -1; });
+  }
+
+  function loadRutSel(todas) {
+    try {
+      var s = JSON.parse(localStorage.getItem("gym.rutSel") || "null");
+      if (Array.isArray(s)) return s.filter(function (r) { return todas.indexOf(r) !== -1; });
+    } catch (e) {}
+    return [];
+  }
+  function saveRutSel(sel) {
+    try { localStorage.setItem("gym.rutSel", JSON.stringify(sel)); } catch (e) {}
+  }
+
   function nombresRutina(rutinas) {
     var seen = {}, out = [];
     (rutinas || []).forEach(function (r) {
@@ -68,14 +89,14 @@
   /* ── Pantalla de ejercicio ── */
   function renderEjercicio(el, ctx) {
     var ses = sesionActiva();
-    var items = ses ? ctx.rutinas.filter(function (r) { return String(r.rutina || "").trim() === ses.rutina; }) : [];
+    var items = ses ? sesItems(ctx, ses) : [];
     var it = items.filter(function (x) { return String(x.ejercicio) === ejSel; })[0] || null;
     var full = !!(ses && it && diaSel === isoHoy());
     window.ViewExercise.render(el, {
       series: ctx.series, cfg: ctx.cfg,
       refresh: ctx.refresh, rerender: ctx.rerender,
       startTimer: startTimer, volver: function () { volver(ctx); },
-    }, { nombre: ejSel, modo: full ? "full" : "view", sesion: ses, item: it });
+    }, { nombre: ejSel, modo: full ? "full" : "view", sesion: ses, item: it, rutina: it ? it.rutina : (ses ? ses.rutina : "") });
   }
 
   /* ── Home del día ── */
@@ -92,29 +113,42 @@
       '<input type="date" id="dCal" value="' + diaSel + '" aria-label="Elegir día" /></div>';
 
     if (ses) {
-      var items = ctx.rutinas.filter(function (r) { return String(r.rutina || "").trim() === ses.rutina; });
-      var bloques = L().agruparRutina(items);
+      var sel = sesRutinas(ctx, ses);
+      var items = sesItems(ctx, ses);
+      if (!items.length) { setSesion(null); return renderDia(el, ctx); }
+      var porRut = L().agruparPorRutina(items, sel);
       var seriesHoy = ctx.series.filter(function (s) { return String(s.sesion) === ses.sesion; });
-      h += '<div class="card"><div class="block-head"><div><h2>' + U().esc(ses.rutina) + '</h2>' +
+      h += '<div class="card"><div class="block-head"><div><h2>' + U().esc(sel.join(" + ") || ses.rutina) + '</h2>' +
         '<p class="sub" style="margin:0">Sesión abierta · ' + L().fmtKg(L().tonelaje(seriesHoy)) + ' kg movidos</p></div>' +
         '<button class="ghost" id="tEnd">Terminar</button></div>' +
-        bloques.map(function (bl) {
-          return '<div class="block' + (bl.tipo === "super" ? " super" : "") + '">' +
-            (bl.tipo === "super" ? '<div class="block-head"><strong>Superserie ' + U().esc(bl.letra) + "</strong></div>" : "") +
-            bl.items.map(function (it) {
-              var nHoy = L().contarSeries(seriesHoy.filter(function (s) { return String(s.ejercicio) === String(it.ejercicio); }));
-              var bd = (it.grupo ? '<span class="badge s">S' + U().esc(it.grupo) + "</span>" : "") +
-                (L().esDrop(it) ? '<span class="badge d">D</span>' : "");
-              return '<div class="item"><button class="link ex-name" data-ej="' + U().esc(it.ejercicio) + '">' +
-                U().esc(it.ejercicio) + "</button>" +
-                "<span>" + bd + ' <span class="dash">' + nHoy + " series</span></span></div>";
+        porRut.map(function (gr) {
+          var bloques = L().agruparRutina(gr.items);
+          return '<div class="block rut-group"><div class="block-head"><strong>' + U().esc(gr.rutina) + "</strong></div>" +
+            bloques.map(function (bl) {
+              var inner = bl.items.map(function (it) {
+                var nHoy = L().contarSeries(seriesHoy.filter(function (s) { return String(s.ejercicio) === String(it.ejercicio); }));
+                var bd = (it.grupo ? '<span class="badge s">S' + U().esc(it.grupo) + "</span>" : "") +
+                  (L().esDrop(it) ? '<span class="badge d">D</span>' : "");
+                return '<div class="item"><button class="link ex-name" data-ej="' + U().esc(it.ejercicio) + '">' +
+                  U().esc(it.ejercicio) + "</button>" +
+                  "<span>" + bd + ' <span class="dash">' + nHoy + " series</span></span></div>";
+              }).join("");
+              if (bl.tipo === "super") {
+                return '<div class="block super" style="margin-top:8px"><div class="block-head"><strong>Superserie ' +
+                  U().esc(bl.letra) + "</strong></div>" + inner + "</div>";
+              }
+              return inner;
             }).join("") + "</div>";
         }).join("") + "</div>";
     } else if (hoy) {
+      var sel0 = loadRutSel(rutinas);
       h += '<div class="card"><h2>Hoy entreno…</h2>' +
-        (rutinas.length ? '<div class="row"><label class="f">Rutina<select id="tRut">' +
-          rutinas.map(function (r) { return '<option value="' + U().esc(r) + '">' + U().esc(r) + "</option>"; }).join("") +
-          '</select></label><button class="primary" id="tStart">Empezar</button>' +
+        '<p class="sub">Tildá una o varias rutinas: la lista sale ordenada por rutina.</p>' +
+        (rutinas.length ? '<div id="tRuts">' + rutinas.map(function (r) {
+          var n = ctx.rutinas.filter(function (x) { return String(x.rutina || "").trim() === r; }).length;
+          return '<div class="item"><label class="f"><span><input type="checkbox" data-rut="' + U().esc(r) + '"' +
+            (sel0.indexOf(r) !== -1 ? " checked" : "") + " /> <strong>" + U().esc(r) + '</strong> <span class="dash">· ' + n + "</span></span></label></div>";
+        }).join("") + '</div><div class="row" style="margin-top:10px"><button class="primary" id="tStart">Empezar</button>' +
           (ultima ? '<button class="ghost" id="tCopy">Repetir: ' + U().esc(ultima.rutina) + "</button>" : "") + "</div>"
           : '<p class="sub">No hay rutinas todavía. Creá una en <strong>Configurar</strong>.</p>') + "</div>";
     }
@@ -168,15 +202,27 @@
       setSesion(null); ejSel = null; stopTimer(); ctx.rerender();
     });
 
+    function checkedRuts() {
+      var out = [];
+      el.querySelectorAll("[data-rut]:checked").forEach(function (c) { out.push(c.getAttribute("data-rut")); });
+      return out.filter(function (r) { return rutinas.indexOf(r) !== -1; });
+    }
+
     var start = el.querySelector("#tStart");
     if (start) start.addEventListener("click", function () {
-      setSesion({ sesion: L().newSesionId(), rutina: el.querySelector("#tRut").value, inicio: new Date().toISOString() });
+      var sel = checkedRuts();
+      if (!sel.length) { U().status(el.querySelector("#cStatus"), "Tildá al menos una rutina.", "error"); return; }
+      saveRutSel(sel);
+      setSesion({ sesion: L().newSesionId(), rutina: L().joinRutinas(sel), inicio: new Date().toISOString() });
       ejSel = null; ctx.rerender();
     });
 
     var copy = el.querySelector("#tCopy");
     if (copy && ultima) copy.addEventListener("click", function () {
-      setSesion({ sesion: L().newSesionId(), rutina: ultima.rutina, inicio: new Date().toISOString() });
+      var sel = L().splitRutinas(ultima.rutina).filter(function (r) { return rutinas.indexOf(r) !== -1; });
+      if (!sel.length) return;
+      saveRutSel(sel);
+      setSesion({ sesion: L().newSesionId(), rutina: L().joinRutinas(sel), inicio: new Date().toISOString() });
       ejSel = null; ctx.rerender();
     });
 

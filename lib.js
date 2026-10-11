@@ -251,6 +251,41 @@
     return porSesion(rows).map(function (g) { return { fecha: g.fecha, t: g.t, valor: g.tonelaje }; });
   }
 
+  var SEP_RUT = " + ";
+
+  function joinRutinas(nombres) { return (nombres || []).join(SEP_RUT); }
+  function splitRutinas(s) {
+    return String(s == null ? "" : s).split(SEP_RUT).map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+
+  /**
+   * Agrupa ítems por rutina para la sesión (una sesión = varias rutinas).
+   * Ordena los grupos según `ordenRutinas`; lo no listado va al final.
+   * Devuelve [{rutina, items:[...]}] con orden interno por `orden`.
+   */
+  function agruparPorRutina(items, ordenRutinas) {
+    var pos = {};
+    (ordenRutinas || []).forEach(function (r, i) { if (!(r in pos)) pos[r] = i; });
+    var grupos = {}, orden = [];
+    (items || []).forEach(function (it) {
+      var r = it.rutina != null ? String(it.rutina).trim() : "";
+      if (!grupos[r]) { grupos[r] = []; orden.push(r); }
+      grupos[r].push(it);
+    });
+    function byOrden(a, b) {
+      var oa = toNum(a.orden), ob = toNum(b.orden);
+      if (oa == null && ob == null) return 0;
+      if (oa == null) return 1;
+      if (ob == null) return -1;
+      return oa - ob;
+    }
+    orden.sort(function (a, b) {
+      var pa = a in pos ? pos[a] : 1e9, pb = b in pos ? pos[b] : 1e9;
+      return pa - pb || String(a).localeCompare(String(b), "es");
+    });
+    return orden.map(function (r) { return { rutina: r, items: grupos[r].slice().sort(byOrden) }; });
+  }
+
   var GymLib = {
     toNum: toNum, toIntReps: toIntReps, fmtKg: fmtKg,
     parseCreado: parseCreado, fmtFecha: fmtFecha, newSesionId: newSesionId,
@@ -259,7 +294,8 @@
     epley: epley, porSesion: porSesion, resumenEjercicio: resumenEjercicio,
     serie1RM: serie1RM, serieMaxKg: serieMaxKg, serieTonelaje: serieTonelaje,
     parseDescanso: parseDescanso, stepNum: stepNum, linTrend: linTrend,
-    filtrarRango: filtrarRango,
+    filtrarRango: filtrarRango, joinRutinas: joinRutinas, splitRutinas: splitRutinas,
+    agruparPorRutina: agruparPorRutina,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = GymLib;
