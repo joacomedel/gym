@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Gym — registro de entrenamiento</title>
+  <meta name="description" content="Configurá tus ejercicios y rutinas, registrá series y mirá tu progreso. Los datos quedan en tu Google Sheet." />
+  <meta name="theme-color" content="#F4F5F3" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232B49E0'/%3E%3Cpath d='M4 13h6l2-5 4 14 3-9 2 3h7' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div id="appRoot" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Gym</span>
+      </div>
+      <div class="topbar-right">
+        <p class="updated" id="updated">—</p>
+        <button class="logout" id="logoutBtn" type="button" title="Olvidar este dispositivo">Salir</button>
+      </div>
+    </header>
+
+    <main>
+      <nav class="tabs" id="tabs" aria-label="Secciones">
+        <button type="button" data-tab="entrenar" class="is-active">Entrenar</button>
+        <button type="button" data-tab="config">Configurar</button>
+        <button type="button" data-tab="evol">Evolución</button>
+      </nav>
+      <section id="view-entrenar" aria-label="Entrenar"></section>
+      <section id="view-config" aria-label="Configurar" hidden></section>
+      <section id="view-evol" aria-label="Evolución" hidden></section>
+    </main>
+
+    <div id="timerbar" hidden>
+      <div>
+        <div class="t-label" id="timerLabel">Descanso</div>
+        <div class="t-time" id="timerTime">0:00</div>
+      </div>
+      <div class="t-acts">
+        <button type="button" id="timerSkip">Saltar</button>
+        <button type="button" id="timerClose">Cerrar</button>
+      </div>
+    </div>
+
+    <footer>
+      <p>Los datos viven en tu Google Sheet. Esta página solo los muestra y agrega registros.</p>
+    </footer>
+  </div>
+
+  <noscript>
+    <p class="noscript">Necesitás JavaScript activado para usar Gym.</p>
+  </noscript>
+
+  <script src="config.js"></script>
+  <script src="bt-core.js"></script>
+  <script src="lib.js"></script>
+  <script src="timer.js"></script>
+  <script src="ui.js"></script>
+  <script src="view-config.js"></script>
+  <script src="view-train.js"></script>
+  <script src="view-evol.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
