@@ -100,3 +100,42 @@ test('parseDescanso valida con fallback', () => {
   assert.equal(GymLib.parseDescanso('-5', 60), 60);
   assert.equal(GymLib.parseDescanso('', 60), 60);
 });
+
+test('stepNum suma pasos con redondeo exacto', () => {
+  assert.equal(GymLib.stepNum('70', 1, 2.5), 72.5);
+  assert.equal(GymLib.stepNum('70', -1, 1), 69);
+  assert.equal(GymLib.stepNum('', 1, 2.5), 2.5);
+  assert.equal(GymLib.stepNum('12.5', 1, 2.5), 15);
+  assert.equal(GymLib.stepNum('0', -1, 1), 0);
+  assert.equal(GymLib.stepNum('70', -1, 2.5), 67.5);
+});
+
+test('linTrend ajusta recta por mínimos cuadrados', () => {
+  const t = GymLib.linTrend([{ t: 0, valor: 0 }, { t: 1, valor: 2 }, { t: 2, valor: 4 }]);
+  assert.ok(Math.abs(t.slope - 2) < 1e-9);
+  assert.ok(Math.abs(t.intercept) < 1e-9);
+  assert.equal(GymLib.linTrend([{ t: 0, valor: 5 }]), null);
+});
+
+test('filtrarRango recorta por ventana', () => {
+  const ahora = new Date(2026, 9, 11).getTime();
+  const d = (ymd) => new Date(ymd[0], ymd[1] - 1, ymd[2]).getTime();
+  const pts = [
+    { t: d([2026, 10, 1]), valor: 1 },
+    { t: d([2026, 8, 1]), valor: 2 },
+    { t: d([2026, 1, 1]), valor: 3 },
+  ];
+  assert.equal(GymLib.filtrarRango(pts, '1m', ahora).length, 1);
+  assert.equal(GymLib.filtrarRango(pts, '3m', ahora).length, 2);
+  assert.equal(GymLib.filtrarRango(pts, 'all', ahora).length, 3);
+});
+
+test('serieMaxKg y serieTonelaje agregan por sesión', () => {
+  const rows = [
+    { sesion: 's1', kg: '80', reps: '8', creado: '2026-10-10T10:00:00' },
+    { sesion: 's1', kg: '70', reps: '10', creado: '2026-10-10T10:05:00' },
+    { sesion: 's2', kg: '60', reps: '10', creado: '2026-10-11T10:00:00' },
+  ];
+  assert.deepEqual(GymLib.serieMaxKg(rows).map((p) => p.valor), [80, 60]);
+  assert.deepEqual(GymLib.serieTonelaje(rows).map((p) => p.valor), [1340, 600]);
+});

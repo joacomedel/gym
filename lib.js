@@ -194,13 +194,72 @@
     return Math.min(n, 3600);
   }
 
+  /** Decimales que tiene un paso (2.5 → 1, 1 → 0). */
+  function stepDec(step) {
+    var s = String(step);
+    var i = s.indexOf(".");
+    return i === -1 ? 0 : s.length - i - 1;
+  }
+
+  /** Suma/resta pasos (delta en pasos, ±1 desde los botones). Nunca baja de 0. */
+  function stepNum(v, delta, step) {
+    step = toNum(step);
+    if (step == null || step <= 0) step = 1;
+    var base = toNum(v);
+    if (base == null) base = 0;
+    var r = Math.round(base / step + (delta || 0)) * step;
+    if (r < 0) r = 0;
+    return parseFloat(r.toFixed(stepDec(step)));
+  }
+
+  /** Recta de tendencia por mínimos cuadrados sobre [{t, valor}]. null si <2. */
+  function linTrend(pts) {
+    pts = pts || [];
+    if (pts.length < 2) return null;
+    var n = pts.length, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    pts.forEach(function (p) { sx += p.t; sy += p.valor; sxx += p.t * p.t; sxy += p.t * p.valor; });
+    var den = n * sxx - sx * sx;
+    if (den === 0) return { slope: 0, intercept: sy / n };
+    var slope = (n * sxy - sx * sy) / den;
+    return { slope: slope, intercept: (sy - slope * sx) / n };
+  }
+
+  var RANGOS = { "1m": 30, "3m": 90, "6m": 180, "1y": 365, all: Infinity };
+
+  /** Filtra puntos por ventana hasta `ahoraMs`. */
+  function filtrarRango(pts, rango, ahoraMs) {
+    var dias = RANGOS[rango] == null ? Infinity : RANGOS[rango];
+    if (dias === Infinity) return (pts || []).slice();
+    var corte = (ahoraMs || Date.now()) - dias * 86400000;
+    return (pts || []).filter(function (p) { return p.t >= corte; });
+  }
+
+  /** Peso máximo por sesión (para el gráfico). */
+  function serieMaxKg(rows) {
+    return porSesion(rows).map(function (g) {
+      var m = null;
+      g.filas.forEach(function (r) {
+        var k = toNum(r.kg);
+        if (k != null && (m == null || k > m)) m = k;
+      });
+      return { fecha: g.fecha, t: g.t, valor: m };
+    }).filter(function (p) { return p.valor != null; });
+  }
+
+  /** Tonelaje por sesión (para el gráfico). */
+  function serieTonelaje(rows) {
+    return porSesion(rows).map(function (g) { return { fecha: g.fecha, t: g.t, valor: g.tonelaje }; });
+  }
+
   var GymLib = {
     toNum: toNum, toIntReps: toIntReps, fmtKg: fmtKg,
     parseCreado: parseCreado, fmtFecha: fmtFecha, newSesionId: newSesionId,
     distinctCategorias: distinctCategorias, agruparRutina: agruparRutina,
     esDrop: esDrop, contarSeries: contarSeries, tonelaje: tonelaje,
     epley: epley, porSesion: porSesion, resumenEjercicio: resumenEjercicio,
-    serie1RM: serie1RM, parseDescanso: parseDescanso,
+    serie1RM: serie1RM, serieMaxKg: serieMaxKg, serieTonelaje: serieTonelaje,
+    parseDescanso: parseDescanso, stepNum: stepNum, linTrend: linTrend,
+    filtrarRango: filtrarRango,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = GymLib;

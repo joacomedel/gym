@@ -106,6 +106,44 @@ td .dash { color: var(--muted); }
 .badge.s { background: #ece7fb; color: var(--badge-s); }
 .badge.d { background: #f9ecdf; color: var(--badge-d); }
 
+/* Navegador por día (home Entrenar) */
+.daynav { display: flex; align-items: center; gap: 10px; }
+.daynav strong { font-family: var(--font-display); font-size: 1.1rem; min-width: 90px; text-align: center; }
+.daynav input[type="date"] { width: auto; margin-left: auto; font-size: 0.85rem; padding: 7px 10px; }
+button.ex-name { font-size: 1rem; color: var(--ink); font-weight: 500; text-align: left; }
+
+/* Cabecera de ejercicio + tabs */
+.ex-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.ex-head h2 { font-size: 1.25rem; }
+#exTabs, #view-entrenar > .tabs, #view-config > .tabs, #view-evol > .tabs { margin-bottom: 12px; }
+
+/* Steppers grandes (carga con manos transpiradas) */
+.stepper { margin-top: 14px; }
+.step-label { font-size: 0.82rem; color: var(--ink-2); font-weight: 600; }
+.step-row { display: flex; gap: 10px; align-items: stretch; margin-top: 6px; }
+.step-btn {
+  flex: 0 0 64px; font-size: 1.8rem; font-weight: 600; line-height: 1;
+  color: var(--accent-ink); background: var(--accent); border: none; border-radius: 12px;
+  cursor: pointer; min-height: 58px;
+}
+.step-btn:active { transform: translateY(1px); }
+.step-row input {
+  flex: 1; text-align: center; font-family: var(--font-display); font-weight: 700;
+  font-size: 2rem; min-width: 0;
+}
+.step-row select { flex: 0 0 76px; font-size: 0.85rem; }
+.save-row { margin-top: 14px; }
+.save-big { flex: 1; font-size: 1.05rem; padding: 14px 18px; }
+
+/* Pills de rango (gráfico) */
+.pills { display: flex; gap: 6px; margin: 12px 0; flex-wrap: wrap; }
+.pills button {
+  font: inherit; font-size: 0.85rem; color: var(--ink-2);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 14px; cursor: pointer;
+}
+.pills button.is-active { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
+
 /* Bloques de rutina / ejercicio */
 .block { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-top: 10px; background: var(--panel); }
 .block.super { border-left: 4px solid var(--badge-s); }

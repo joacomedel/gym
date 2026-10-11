@@ -1,13 +1,38 @@
-/* Gym — vista Entrenar: sesión del día, registro de series y timer. */
+/* Gym — vista Entrenar: home por día (estilo FitNotes) + pantalla de ejercicio.
+ * Día = navegador ‹ HOY › + sesiones de ese día + empezar/copiar.
+ * Tocar un ejercicio abre ViewExercise (full con sesión activa, view si no).
+ */
 (function () {
   "use strict";
 
   var L = function () { return window.GymLib; };
   var U = function () { return window.GymUI; };
+  var diaSel = null;
   var ejSel = null;
-  var cd = null;         // Countdown (GymTimer)
+  var cd = null;
   var tickH = null;
   var cfgRef = null;
+
+  function isoHoy() {
+    var d = new Date();
+    return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+  }
+  function p2(n) { return (n < 10 ? "0" : "") + n; }
+  function isoAdd(iso, n) {
+    var p = iso.split("-");
+    var d = new Date(+p[0], +p[1] - 1, +p[2]);
+    d.setDate(d.getDate() + n);
+    return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+  }
+  function isoToFecha(iso) {
+    var p = String(iso || "").split("-");
+    return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : "";
+  }
+  function labelDia(iso) {
+    if (iso === isoHoy()) return "HOY";
+    if (iso === isoAdd(isoHoy(), -1)) return "Ayer";
+    return isoToFecha(iso);
+  }
 
   function sesionActiva() {
     try {
@@ -33,29 +58,87 @@
 
   function render(el, ctx) {
     cfgRef = ctx.cfg;
-    var ses = sesionActiva();
-    if (!ses) return renderInicio(el, ctx);
-    var items = ctx.rutinas.filter(function (r) { return String(r.rutina || "").trim() === ses.rutina; });
-    if (!items.length) {
-      setSesion(null);
-      return renderInicio(el, ctx);
-    }
-    renderSesion(el, ctx, ses, items);
+    if (!diaSel) diaSel = isoHoy();
+    if (ejSel) return renderEjercicio(el, ctx);
+    renderDia(el, ctx);
   }
 
-  /* ── Sin sesión: elegir rutina y arrancar ── */
-  function renderInicio(el, ctx) {
+  function volver(ctx) { ejSel = null; ctx.rerender(); }
+
+  /* ── Pantalla de ejercicio ── */
+  function renderEjercicio(el, ctx) {
+    var ses = sesionActiva();
+    var items = ses ? ctx.rutinas.filter(function (r) { return String(r.rutina || "").trim() === ses.rutina; }) : [];
+    var it = items.filter(function (x) { return String(x.ejercicio) === ejSel; })[0] || null;
+    var full = !!(ses && it && diaSel === isoHoy());
+    window.ViewExercise.render(el, {
+      series: ctx.series, cfg: ctx.cfg,
+      refresh: ctx.refresh, rerender: ctx.rerender,
+      startTimer: startTimer, volver: function () { volver(ctx); },
+    }, { nombre: ejSel, modo: full ? "full" : "view", sesion: ses, item: it });
+  }
+
+  /* ── Home del día ── */
+  function renderDia(el, ctx) {
+    var hoy = diaSel === isoHoy();
+    var ses = hoy ? sesionActiva() : null;
+    var grupos = L().porSesion(ctx.series).filter(function (g) { return g.fecha === isoToFecha(diaSel); });
     var rutinas = nombresRutina(ctx.rutinas);
-    el.innerHTML =
-      '<div class="card"><h2>Hoy entreno…</h2>' +
-      '<p class="sub">Elegí la rutina en el momento. La sesión queda abierta hasta que la termines.</p>' +
-      (rutinas.length ? '<div class="row"><label class="f">Rutina<select id="tRut">' +
-        rutinas.map(function (r) { return '<option value="' + U().esc(r) + '">' + U().esc(r) + "</option>"; }).join("") +
-        '</select></label><button class="primary" id="tStart">Empezar</button></div>'
-        : '<p class="sub">No hay rutinas todavía. Creá una en <strong>Configurar</strong>.</p>') +
-      "</div>" +
-      '<div class="card"><h2>Descanso y avisos</h2>' +
-      '<p class="sub">Default cuando el ítem no tiene el suyo. El timer corre con timestamp: si el celu se duerme, avisa al volver.</p>' +
+    var ultima = L().porSesion(ctx.series).filter(function (g) { return g.rutina; }).pop();
+
+    var h = '<div class="card daynav"><button class="ghost" id="dPrev">‹</button>' +
+      '<strong id="dLabel">' + U().esc(labelDia(diaSel)) + "</strong>" +
+      '<button class="ghost" id="dNext">›</button>' +
+      '<input type="date" id="dCal" value="' + diaSel + '" aria-label="Elegir día" /></div>';
+
+    if (ses) {
+      var items = ctx.rutinas.filter(function (r) { return String(r.rutina || "").trim() === ses.rutina; });
+      var bloques = L().agruparRutina(items);
+      var seriesHoy = ctx.series.filter(function (s) { return String(s.sesion) === ses.sesion; });
+      h += '<div class="card"><div class="block-head"><div><h2>' + U().esc(ses.rutina) + '</h2>' +
+        '<p class="sub" style="margin:0">Sesión abierta · ' + L().fmtKg(L().tonelaje(seriesHoy)) + ' kg movidos</p></div>' +
+        '<button class="ghost" id="tEnd">Terminar</button></div>' +
+        bloques.map(function (bl) {
+          return '<div class="block' + (bl.tipo === "super" ? " super" : "") + '">' +
+            (bl.tipo === "super" ? '<div class="block-head"><strong>Superserie ' + U().esc(bl.letra) + "</strong></div>" : "") +
+            bl.items.map(function (it) {
+              var nHoy = L().contarSeries(seriesHoy.filter(function (s) { return String(s.ejercicio) === String(it.ejercicio); }));
+              var bd = (it.grupo ? '<span class="badge s">S' + U().esc(it.grupo) + "</span>" : "") +
+                (L().esDrop(it) ? '<span class="badge d">D</span>' : "");
+              return '<div class="item"><button class="link ex-name" data-ej="' + U().esc(it.ejercicio) + '">' +
+                U().esc(it.ejercicio) + "</button>" +
+                "<span>" + bd + ' <span class="dash">' + nHoy + " series</span></span></div>";
+            }).join("") + "</div>";
+        }).join("") + "</div>";
+    } else if (hoy) {
+      h += '<div class="card"><h2>Hoy entreno…</h2>' +
+        (rutinas.length ? '<div class="row"><label class="f">Rutina<select id="tRut">' +
+          rutinas.map(function (r) { return '<option value="' + U().esc(r) + '">' + U().esc(r) + "</option>"; }).join("") +
+          '</select></label><button class="primary" id="tStart">Empezar</button>' +
+          (ultima ? '<button class="ghost" id="tCopy">Repetir: ' + U().esc(ultima.rutina) + "</button>" : "") + "</div>"
+          : '<p class="sub">No hay rutinas todavía. Creá una en <strong>Configurar</strong>.</p>') + "</div>";
+    }
+
+    if (grupos.length) {
+      h += '<div class="card"><h2>' + (hoy && !ses ? "Historial de hoy" : "Ese día") + "</h2>" +
+        grupos.slice().reverse().map(function (g) {
+          var nombres = [];
+          var seen = {};
+          g.filas.forEach(function (r) {
+            var n = String(r.ejercicio);
+            if (!seen[n]) { seen[n] = true; nombres.push(n); }
+          });
+          return '<div class="block"><div class="block-head"><strong>' + U().esc(g.rutina || "Sin rutina") + "</strong>" +
+            '<span class="meta">' + g.nSeries + " series · " + L().fmtKg(g.tonelaje) + " kg</span></div>" +
+            nombres.map(function (n) {
+              return '<div class="item"><button class="link ex-name" data-ej="' + U().esc(n) + '">' + U().esc(n) + "</button></div>";
+            }).join("") + "</div>";
+        }).join("") + "</div>";
+    } else if (!hoy) {
+      h += '<div class="card"><p class="sub">Sin registros ese día.</p></div>';
+    }
+
+    h += '<div class="card"><h2>Descanso y avisos</h2>' +
       '<div class="row"><label class="f">Descanso default (s)<input id="cDesc" inputmode="numeric" value="' + ctx.cfg.descanso + '" /></label></div>' +
       '<div class="row" style="margin-top:10px">' +
       '<label class="f"><span><input type="checkbox" id="cSnd"' + (ctx.cfg.sonido ? " checked" : "") + ' /> Sonido</span></label>' +
@@ -64,12 +147,37 @@
       '<button class="ghost" id="cNotPerm">Permitir notificaciones</button></div>' +
       '<p class="status" id="cStatus"></p></div>';
 
+    el.innerHTML = h;
+
+    el.querySelector("#dPrev").addEventListener("click", function () { diaSel = isoAdd(diaSel, -1); ejSel = null; ctx.rerender(); });
+    el.querySelector("#dNext").addEventListener("click", function () {
+      if (diaSel === isoHoy()) return;
+      diaSel = isoAdd(diaSel, 1); ejSel = null; ctx.rerender();
+    });
+    el.querySelector("#dCal").addEventListener("change", function (ev) {
+      if (ev.target.value) { diaSel = ev.target.value; ejSel = null; ctx.rerender(); }
+    });
+
+    el.querySelectorAll("[data-ej]").forEach(function (b) {
+      b.addEventListener("click", function () { ejSel = b.getAttribute("data-ej"); ctx.rerender(); });
+    });
+
+    var end = el.querySelector("#tEnd");
+    if (end) end.addEventListener("click", function () {
+      if (!window.confirm("¿Terminar la sesión? Queda guardada en el historial.")) return;
+      setSesion(null); ejSel = null; stopTimer(); ctx.rerender();
+    });
+
     var start = el.querySelector("#tStart");
     if (start) start.addEventListener("click", function () {
-      var r = el.querySelector("#tRut").value;
-      setSesion({ sesion: L().newSesionId(), rutina: r, inicio: new Date().toISOString() });
-      ejSel = null;
-      ctx.rerender();
+      setSesion({ sesion: L().newSesionId(), rutina: el.querySelector("#tRut").value, inicio: new Date().toISOString() });
+      ejSel = null; ctx.rerender();
+    });
+
+    var copy = el.querySelector("#tCopy");
+    if (copy && ultima) copy.addEventListener("click", function () {
+      setSesion({ sesion: L().newSesionId(), rutina: ultima.rutina, inicio: new Date().toISOString() });
+      ejSel = null; ctx.rerender();
     });
 
     function saveCfg() {
@@ -90,149 +198,7 @@
     });
   }
 
-  /* ── Sesión abierta ── */
-  function renderSesion(el, ctx, ses, items) {
-    var bloques = L().agruparRutina(items);
-    if (!ejSel || !items.some(function (it) { return String(it.ejercicio) === ejSel; })) {
-      ejSel = items.slice().sort(function (a, b) {
-        var oa = L().toNum(a.orden), ob = L().toNum(b.orden);
-        return (oa == null ? 9999 : oa) - (ob == null ? 9999 : ob);
-      })[0].ejercicio;
-    }
-    var seriesHoy = ctx.series.filter(function (s) { return String(s.sesion) === ses.sesion; });
-
-    el.innerHTML =
-      '<div class="card"><div class="block-head"><div><h2>' + U().esc(ses.rutina) + '</h2>' +
-      '<p class="sub" style="margin:0">Sesión abierta · ' + seriesHoy.length + ' registros</p></div>' +
-      '<button class="ghost" id="tEnd">Terminar</button></div>' +
-      '<div id="tBlocks">' + bloques.map(function (bl) {
-        return '<div class="block' + (bl.tipo === "super" ? " super" : "") + '"><div class="block-head"><strong>' +
-          (bl.tipo === "super" ? "Superserie " + U().esc(bl.letra) : U().esc(bl.items[0].ejercicio)) + "</strong>" +
-          '<span class="meta">' + L().tonelaje(seriesHoy.filter(function (s) {
-            return bl.items.some(function (it) { return String(it.ejercicio) === String(s.ejercicio); });
-          })) + ' kg</span></div>' +
-          bl.items.map(function (it) {
-            var nHoy = L().contarSeries(seriesHoy.filter(function (s) { return String(s.ejercicio) === String(it.ejercicio); }));
-            var badges = (it.grupo ? '<span class="badge s">S' + U().esc(it.grupo) + "</span>" : "") +
-              (L().esDrop(it) ? '<span class="badge d">D</span>' : "");
-            return '<div class="item"><button class="link" data-ej="' + U().esc(it.ejercicio) + '" style="font-size:1rem;color:' +
-              (String(it.ejercicio) === ejSel ? "var(--ink);font-weight:700" : "var(--ink-2)") + '">' +
-              (String(it.ejercicio) === ejSel ? "▸ " : "") + U().esc(it.ejercicio) + "</button>" +
-              "<span>" + badges + ' <span class="dash">' + nHoy + " series · " + U().esc(it.descanso_seg || ctx.cfg.descanso) + "s</span></span></div>";
-          }).join("") + "</div>";
-      }).join("") + "</div></div>" +
-      '<div class="card" id="tDetail"></div>';
-
-    el.querySelector("#tEnd").addEventListener("click", function () {
-      if (!window.confirm("¿Terminar la sesión? Queda guardada en el historial.")) return;
-      setSesion(null);
-      ejSel = null;
-      stopTimer();
-      ctx.rerender();
-    });
-
-    el.querySelectorAll("[data-ej]").forEach(function (b) {
-      b.addEventListener("click", function () { ejSel = b.getAttribute("data-ej"); ctx.rerender(); });
-    });
-
-    renderDetalle(el.querySelector("#tDetail"), ctx, ses, items, seriesHoy);
-  }
-
-  function renderDetalle(box, ctx, ses, items, seriesHoy) {
-    var it = items.filter(function (x) { return String(x.ejercicio) === ejSel; })[0];
-    if (!it) return;
-    var mias = seriesHoy.filter(function (s) { return String(s.ejercicio) === ejSel; })
-      .sort(function (a, b) {
-        var da = L().parseCreado(a.creado), db = L().parseCreado(b.creado);
-        return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
-      });
-    // Vez pasada: última sesión distinta con este ejercicio.
-    var otras = L().porSesion(ctx.series.filter(function (s) {
-      return String(s.ejercicio) === ejSel && String(s.sesion) !== ses.sesion;
-    }));
-    var pasada = otras.length ? otras[otras.length - 1] : null;
-
-    box.innerHTML =
-      "<h2>" + U().esc(ejSel) +
-      (it.grupo ? '<span class="badge s">S' + U().esc(it.grupo) + "</span>" : "") +
-      (L().esDrop(it) ? '<span class="badge d">D</span>' : "") + "</h2>" +
-      '<p class="sub">' + (pasada
-        ? "Vez pasada (" + U().esc(pasada.fecha) + "): " + pasada.filas.map(function (r) {
-          return L().fmtKg(r.kg) + "×" + (r.reps || "–");
-        }).join(" · ")
-        : "Primera vez que lo registrás.") + "</p>" +
-      '<div class="row"><label class="f">Kg<input id="sKg" inputmode="decimal" placeholder="80" /></label>' +
-      '<label class="f">Reps<input id="sReps" inputmode="numeric" placeholder="8" /></label>' +
-      '<label class="f"><span><input type="checkbox" id="sDrop"' + (L().esDrop(it) ? " checked" : "") + ' /> Dropset</span></label>' +
-      '<button class="primary" id="sAdd">Anotar serie</button></div>' +
-      '<p class="status" id="sStatus"></p>' +
-      '<div id="sList">' + (mias.length ? mias.map(function (r, i) {
-        var badges = (it.grupo ? '<span class="badge s">S' + U().esc(it.grupo) + "</span>" : "") +
-          (L().esDrop(r) ? '<span class="badge d">D</span>' : "");
-        return '<div class="item" data-sid="' + U().esc(r.id) + '"><span><strong>' + (i + 1) + ".</strong> " +
-          L().fmtKg(r.kg) + " kg × " + U().esc(r.reps) + badges + "</span>" +
-          '<span class="acts"><button class="link" data-s-edit="' + U().esc(r.id) + '">Editar</button>' +
-          '<button class="link del" data-s-del="' + U().esc(r.id) + '">Borrar</button></span></div>';
-      }).join("") : '<p class="sub">Sin series todavía en esta sesión.</p>') + "</div>";
-
-    function st() { return box.querySelector("#sStatus"); }
-
-    box.querySelector("#sAdd").addEventListener("click", function () {
-      var kg = box.querySelector("#sKg").value, reps = box.querySelector("#sReps").value;
-      if (L().toNum(kg) == null) { U().status(st(), "Kg inválido. Ej: 80 o 80,5", "error"); return; }
-      if (L().toNum(reps) == null || Math.round(L().toNum(reps)) <= 0) { U().status(st(), "Reps inválidas.", "error"); return; }
-      U().status(st(), "Guardando…", "");
-      bt.append("series", {
-        sesion: ses.sesion, rutina: ses.rutina, ejercicio: ejSel,
-        kg: String(kg).trim(), reps: String(Math.round(L().toNum(reps))),
-        grupo: it.grupo || "", dropset: box.querySelector("#sDrop").checked ? "sí" : "",
-      }).then(function (res) {
-        if (!res || !res.ok) throw new Error((res && res.error) || "no se pudo guardar");
-        U().status(st(), "Listo ✓", "ok");
-        ctx.refresh().then(function () {
-          startTimer(ejSel, L().parseDescanso(it.descanso_seg, ctx.cfg.descanso));
-        });
-      }).catch(function (e) { U().status(st(), String((e && e.message) || e), "error"); });
-    });
-
-    box.querySelectorAll("[data-s-del]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        if (!window.confirm("¿Borrar esta serie?")) return;
-        bt.remove("series", b.getAttribute("data-s-del")).then(function (res) {
-          if (!res || !res.ok) throw new Error((res && res.error) || "no se pudo borrar");
-          ctx.refresh();
-        }).catch(function (e) { U().status(st(), String((e && e.message) || e), "error"); });
-      });
-    });
-
-    box.querySelectorAll("[data-s-edit]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var id = b.getAttribute("data-s-edit");
-        var r = mias.filter(function (x) { return String(x.id) === id; })[0];
-        if (!r) return;
-        var row = box.querySelector('[data-sid="' + id + '"]');
-        row.innerHTML = '<span class="row"><label class="f">Kg<input data-f="kg" value="' + U().esc(r.kg) + '" /></label>' +
-          '<label class="f">Reps<input data-f="reps" value="' + U().esc(r.reps) + '" /></label>' +
-          '<label class="f"><span><input type="checkbox" data-f="drop"' + (L().esDrop(r) ? " checked" : "") + ' /> D</span></label></span>' +
-          '<span class="acts"><button class="link" data-s-save="' + U().esc(id) + '">Guardar</button>' +
-          '<button class="link" data-s-cancel>Cancelar</button></span>';
-        row.querySelector("[data-s-cancel]").addEventListener("click", function () { ctx.rerender(); });
-        row.querySelector("[data-s-save]").addEventListener("click", function () {
-          var kg = row.querySelector('[data-f="kg"]').value, reps = row.querySelector('[data-f="reps"]').value;
-          if (L().toNum(kg) == null || L().toNum(reps) == null) { U().status(st(), "Valores inválidos.", "error"); return; }
-          bt.update("series", id, {
-            kg: String(kg).trim(), reps: String(Math.round(L().toNum(reps))),
-            dropset: row.querySelector('[data-f="drop"]').checked ? "sí" : "",
-          }).then(function (res) {
-            if (!res || !res.ok) throw new Error((res && res.error) || "no se pudo guardar");
-            ctx.refresh();
-          }).catch(function (e) { U().status(st(), String((e && e.message) || e), "error"); });
-        });
-      });
-    });
-  }
-
-  /* ── Timer ── */
+  /* ── Timer (sin cambios) ── */
   function ensureCd() {
     if (!cd) {
       cd = new window.GymTimer.Countdown({
@@ -258,7 +224,7 @@
 
   function startTimer(nombre, seg) {
     ensureCd().start(seg);
-    document.getElementById("timerLabel").textContent = "Descanso · " + nombre + " (" + seg + 's)';
+    document.getElementById("timerLabel").textContent = "Descanso · " + nombre + " (" + seg + "s)";
     paintTimer();
     if (tickH) clearInterval(tickH);
     tickH = setInterval(function () { if (cd) cd.poll(); }, 500);
@@ -279,5 +245,5 @@
     });
   }
 
-  window.ViewTrain = { render: render, wireGlobal: wireGlobal, pollTimer: function () { if (cd && cd.active()) cd.poll(); } };
+  window.ViewTrain = { render: render, wireGlobal: wireGlobal, startTimer: startTimer, pollTimer: function () { if (cd && cd.active()) cd.poll(); } };
 })();

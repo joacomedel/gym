@@ -51,6 +51,7 @@
     return {
       ejercicios: state.ejercicios, rutinas: state.rutinas, series: state.series,
       cfg: state.cfg, saveCfg: saveCfg, refresh: refresh, rerender: rerender,
+      startTimer: function (n, s) { window.ViewTrain.startTimer(n, s); },
     };
   }
 
