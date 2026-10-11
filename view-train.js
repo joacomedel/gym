@@ -34,38 +34,14 @@
     return isoToFecha(iso);
   }
 
-  function sesionActiva() {
-    try {
-      var s = JSON.parse(localStorage.getItem("gym.sesion") || "null");
-      return s && s.sesion ? s : null;
-    } catch (e) { return null; }
-  }
-  function setSesion(s) {
-    try {
-      if (s) localStorage.setItem("gym.sesion", JSON.stringify(s));
-      else localStorage.removeItem("gym.sesion");
-    } catch (e) {}
-  }
+  function todayId() { return "dia-" + isoHoy(); }
 
-  /** Rutinas de una sesión (una sesión = varias rutinas, etiqueta "A + B"). */
-  function sesRutinas(ctx, ses) {
-    var todas = nombresRutina(ctx.rutinas);
-    return L().splitRutinas(ses.rutina).filter(function (r) { return todas.indexOf(r) !== -1; });
+  function visibles(ctx) {
+    return nombresRutina(ctx.rutinas).filter(function (r) { return U().rutVisible(r); });
   }
-  function sesItems(ctx, ses) {
-    var sel = sesRutinas(ctx, ses);
-    return ctx.rutinas.filter(function (r) { return sel.indexOf(String(r.rutina || "").trim()) !== -1; });
-  }
-
-  function loadRutSel(todas) {
-    try {
-      var s = JSON.parse(localStorage.getItem("gym.rutSel") || "null");
-      if (Array.isArray(s)) return s.filter(function (r) { return todas.indexOf(r) !== -1; });
-    } catch (e) {}
-    return [];
-  }
-  function saveRutSel(sel) {
-    try { localStorage.setItem("gym.rutSel", JSON.stringify(sel)); } catch (e) {}
+  function itemsVisibles(ctx) {
+    var vis = visibles(ctx);
+    return ctx.rutinas.filter(function (r) { return vis.indexOf(String(r.rutina || "").trim()) !== -1; });
   }
 
   function nombresRutina(rutinas) {
@@ -86,42 +62,36 @@
 
   function volver(ctx) { ejSel = null; ctx.rerender(); }
 
-  /* ── Pantalla de ejercicio ── */
+  /* ── Pantalla de ejercicio (sesión implícita = el día) ── */
   function renderEjercicio(el, ctx) {
-    var ses = sesionActiva();
-    var items = ses ? sesItems(ctx, ses) : [];
+    var hoy = diaSel === isoHoy();
+    var items = hoy ? itemsVisibles(ctx) : [];
     var it = items.filter(function (x) { return String(x.ejercicio) === ejSel; })[0] || null;
-    var full = !!(ses && it && diaSel === isoHoy());
+    var ses = hoy ? { sesion: todayId(), rutina: it ? it.rutina : "" } : null;
     window.ViewExercise.render(el, {
       series: ctx.series, cfg: ctx.cfg,
       refresh: ctx.refresh, rerender: ctx.rerender,
       startTimer: startTimer, volver: function () { volver(ctx); },
-    }, { nombre: ejSel, modo: full ? "full" : "view", sesion: ses, item: it, rutina: it ? it.rutina : (ses ? ses.rutina : "") });
+    }, { nombre: ejSel, modo: it && hoy ? "full" : "view", sesion: ses, item: it, rutina: it ? it.rutina : "" });
   }
 
   /* ── Home del día ── */
   function renderDia(el, ctx) {
     var hoy = diaSel === isoHoy();
-    var ses = hoy ? sesionActiva() : null;
     var grupos = L().porSesion(ctx.series).filter(function (g) { return g.fecha === isoToFecha(diaSel); });
-    var rutinas = nombresRutina(ctx.rutinas);
-    var ultima = L().porSesion(ctx.series).filter(function (g) { return g.rutina; }).pop();
 
     var h = '<div class="card daynav"><button class="ghost" id="dPrev">‹</button>' +
       '<strong id="dLabel">' + U().esc(labelDia(diaSel)) + "</strong>" +
       '<button class="ghost" id="dNext">›</button>' +
       '<input type="date" id="dCal" value="' + diaSel + '" aria-label="Elegir día" /></div>';
 
-    if (ses) {
-      var sel = sesRutinas(ctx, ses);
-      var items = sesItems(ctx, ses);
-      if (!items.length) { setSesion(null); return renderDia(el, ctx); }
-      var porRut = L().agruparPorRutina(items, sel);
-      var seriesHoy = ctx.series.filter(function (s) { return String(s.sesion) === ses.sesion; });
-      h += '<div class="card"><div class="block-head"><div><h2>' + U().esc(sel.join(" + ") || ses.rutina) + '</h2>' +
-        '<p class="sub" style="margin:0">Sesión abierta · ' + L().fmtKg(L().tonelaje(seriesHoy)) + ' kg movidos</p></div>' +
-        '<button class="ghost" id="tEnd">Terminar</button></div>' +
-        porRut.map(function (gr) {
+    if (hoy) {
+      var vis = visibles(ctx);
+      var items = itemsVisibles(ctx);
+      var seriesHoy = ctx.series.filter(function (s) { return String(s.sesion) === todayId(); });
+      h += '<div class="card"><div class="block-head"><div><h2>Hoy</h2>' +
+        '<p class="sub" style="margin:0">' + L().fmtKg(L().tonelaje(seriesHoy)) + ' kg movidos · tocá un ejercicio y anotá</p></div></div>' +
+        (items.length ? L().agruparPorRutina(items, vis).map(function (gr) {
           var bloques = L().agruparRutina(gr.items);
           return '<div class="block rut-group"><div class="block-head"><strong>' + U().esc(gr.rutina) + "</strong></div>" +
             bloques.map(function (bl) {
@@ -139,22 +109,11 @@
               }
               return inner;
             }).join("") + "</div>";
-        }).join("") + "</div>";
-    } else if (hoy) {
-      var sel0 = loadRutSel(rutinas);
-      h += '<div class="card"><h2>Hoy entreno…</h2>' +
-        '<p class="sub">Tildá una o varias rutinas: la lista sale ordenada por rutina.</p>' +
-        (rutinas.length ? '<div id="tRuts">' + rutinas.map(function (r) {
-          var n = ctx.rutinas.filter(function (x) { return String(x.rutina || "").trim() === r; }).length;
-          return '<div class="item"><label class="f"><span><input type="checkbox" data-rut="' + U().esc(r) + '"' +
-            (sel0.indexOf(r) !== -1 ? " checked" : "") + " /> <strong>" + U().esc(r) + '</strong> <span class="dash">· ' + n + "</span></span></label></div>";
-        }).join("") + '</div><div class="row" style="margin-top:10px"><button class="primary" id="tStart">Empezar</button>' +
-          (ultima ? '<button class="ghost" id="tCopy">Repetir: ' + U().esc(ultima.rutina) + "</button>" : "") + "</div>"
-          : '<p class="sub">No hay rutinas todavía. Creá una en <strong>Configurar</strong>.</p>') + "</div>";
+        }).join("") : '<p class="sub">No hay rutinas visibles. Tildalas en <strong>Configurar</strong>.</p>') + "</div>";
     }
 
     if (grupos.length) {
-      h += '<div class="card"><h2>' + (hoy && !ses ? "Historial de hoy" : "Ese día") + "</h2>" +
+      h += '<div class="card"><h2>' + (hoy ? "Registrado hoy" : "Ese día") + "</h2>" +
         grupos.slice().reverse().map(function (g) {
           var nombres = [];
           var seen = {};
@@ -194,36 +153,6 @@
 
     el.querySelectorAll("[data-ej]").forEach(function (b) {
       b.addEventListener("click", function () { ejSel = b.getAttribute("data-ej"); ctx.rerender(); });
-    });
-
-    var end = el.querySelector("#tEnd");
-    if (end) end.addEventListener("click", function () {
-      if (!window.confirm("¿Terminar la sesión? Queda guardada en el historial.")) return;
-      setSesion(null); ejSel = null; stopTimer(); ctx.rerender();
-    });
-
-    function checkedRuts() {
-      var out = [];
-      el.querySelectorAll("[data-rut]:checked").forEach(function (c) { out.push(c.getAttribute("data-rut")); });
-      return out.filter(function (r) { return rutinas.indexOf(r) !== -1; });
-    }
-
-    var start = el.querySelector("#tStart");
-    if (start) start.addEventListener("click", function () {
-      var sel = checkedRuts();
-      if (!sel.length) { U().status(el.querySelector("#cStatus"), "Tildá al menos una rutina.", "error"); return; }
-      saveRutSel(sel);
-      setSesion({ sesion: L().newSesionId(), rutina: L().joinRutinas(sel), inicio: new Date().toISOString() });
-      ejSel = null; ctx.rerender();
-    });
-
-    var copy = el.querySelector("#tCopy");
-    if (copy && ultima) copy.addEventListener("click", function () {
-      var sel = L().splitRutinas(ultima.rutina).filter(function (r) { return rutinas.indexOf(r) !== -1; });
-      if (!sel.length) return;
-      saveRutSel(sel);
-      setSesion({ sesion: L().newSesionId(), rutina: L().joinRutinas(sel), inicio: new Date().toISOString() });
-      ejSel = null; ctx.rerender();
     });
 
     function saveCfg() {

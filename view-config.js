@@ -48,6 +48,12 @@
         return '<button class="ghost" data-r-sel="' + U().esc(r) + '">' + U().esc(r) + "</button>";
       }).join(" ") + "</p>" : "") +
       '<p class="status" id="rStatus"></p>' +
+      '<div class="card" style="margin-top:12px"><h2>Visibles en Entrenar</h2>' +
+      '<p class="sub">Tildá las rutinas que querés ver cuando entrenás.</p>' +
+      (rutinas.length ? rutinas.map(function (r) {
+        return '<div class="item"><label class="f"><span><input type="checkbox" data-rutvis="' + U().esc(r) + '"' +
+          (U().rutVisible(r) ? " checked" : "") + " /> <strong>" + U().esc(r) + "</strong></span></label></div>";
+      }).join("") : '<p class="sub">Todavía no hay rutinas.</p>') + "</div>" +
       '<div id="rEdit"></div></div>';
 
     bind(el, ctx, cats);
@@ -134,6 +140,12 @@
 
     el.querySelectorAll("[data-r-sel]").forEach(function (b) {
       b.addEventListener("click", function () { setSel(b.getAttribute("data-r-sel")); ctx.rerender(); });
+    });
+
+    el.querySelectorAll("[data-rutvis]").forEach(function (c) {
+      c.addEventListener("change", function () {
+        U().setRutVisible(c.getAttribute("data-rutvis"), c.checked);
+      });
     });
 
     var del = el.querySelector("#rDel");

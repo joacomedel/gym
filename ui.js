@@ -68,8 +68,25 @@
     } catch (e) { return Promise.resolve("error"); }
   }
 
+  /* Rutinas visibles en Entrenar (se tildan en Configurar). Default: todas. */
+  function loadRutVis() {
+    try { return JSON.parse(localStorage.getItem("gym.rutVis") || "null") || {}; }
+    catch (e) { return {}; }
+  }
+  function rutVisible(nombre) {
+    var v = loadRutVis();
+    if (!(nombre in v)) return true;
+    return !!v[nombre];
+  }
+  function setRutVisible(nombre, on) {
+    var v = loadRutVis();
+    v[nombre] = !!on;
+    try { localStorage.setItem("gym.rutVis", JSON.stringify(v)); } catch (e) {}
+  }
+
   window.GymUI = {
     esc: esc, fmtMMSS: fmtMMSS, status: status,
     beep: beep, vibrar: vibrar, notificar: notificar, pedirPermisoNoti: pedirPermisoNoti,
+    rutVisible: rutVisible, setRutVisible: setRutVisible,
   };
 })();
